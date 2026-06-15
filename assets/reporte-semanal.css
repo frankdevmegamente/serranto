@@ -1,0 +1,223 @@
+/* =========================================================
+   Reporte Semanal - Estilos específicos
+   ========================================================= */
+
+/* --- Weekly Navigation --- */
+.semana-navegacion {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.semana-selector {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    justify-content: center;
+}
+
+.semana-rango {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.semana-selector input[type="date"] {
+    background: var(--bg-input);
+    border: 1px solid var(--border-input);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    outline: none;
+    max-width: 160px;
+}
+
+.semana-selector input[type="date"]:focus {
+    border-color: var(--color-primary);
+}
+
+/* --- Report action buttons --- */
+.reporte-acciones {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.reporte-acciones .reporte-info {
+    margin-left: auto;
+    font-size: 0.8125rem;
+}
+
+/* --- Weekly table adjustments --- */
+#tab-todos .table-wrapper,
+#tab-exitosos .table-wrapper,
+#tab-fallidos .table-wrapper {
+    background: var(--bg-card);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    overflow-x: auto;
+}
+
+#tab-todos .table-wrapper table,
+#tab-exitosos .table-wrapper table,
+#tab-fallidos .table-wrapper table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#tab-todos .table-wrapper thead th,
+#tab-exitosos .table-wrapper thead th,
+#tab-fallidos .table-wrapper thead th {
+    background: var(--bg-table-header);
+    padding: 0.6rem 0.7rem;
+    text-align: left;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    font-weight: 600;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+}
+
+#tab-todos .table-wrapper tbody td,
+#tab-exitosos .table-wrapper tbody td,
+#tab-fallidos .table-wrapper tbody td {
+    padding: 0.55rem 0.7rem;
+    font-size: 0.8rem;
+    border-bottom: 1px solid var(--border-light);
+}
+
+#tab-todos .table-wrapper tbody tr,
+#tab-exitosos .table-wrapper tbody tr,
+#tab-fallidos .table-wrapper tbody tr {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+#tab-todos .table-wrapper tbody tr:hover,
+#tab-exitosos .table-wrapper tbody tr:hover,
+#tab-fallidos .table-wrapper tbody tr:hover {
+    background: var(--bg-table-hover);
+}
+
+#tab-todos .table-wrapper tbody tr:last-child td,
+#tab-exitosos .table-wrapper tbody tr:last-child td,
+#tab-fallidos .table-wrapper tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* --- Mode toggle (semanal / personalizado) --- */
+.modo-toggle {
+    display: flex;
+    gap: 0.25rem;
+    background: var(--bg-body);
+    border-radius: var(--radius-md);
+    padding: 0.2rem;
+    flex: 0 0 auto;
+}
+
+.modo-btn {
+    padding: 0.35rem 0.75rem;
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.modo-btn:hover { color: var(--text-primary); }
+
+.modo-btn.active {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    font-weight: 600;
+    box-shadow: var(--shadow-sm);
+}
+
+.nav-mode {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+    flex-wrap: wrap;
+}
+
+.custom-range-inputs {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: 1;
+    flex-wrap: wrap;
+}
+
+.custom-range-inputs label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+}
+
+.custom-range-inputs input[type="date"] {
+    background: var(--bg-input);
+    border: 1px solid var(--border-input);
+    border-radius: var(--radius-sm);
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--text-primary);
+    outline: none;
+    max-width: 150px;
+}
+
+.custom-range-inputs input[type="date"]:focus {
+    border-color: var(--color-primary);
+}
+
+/* --- Responsive --- */
+@media (max-width: 768px) {
+    .semana-navegacion {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .semana-selector {
+        flex-direction: column;
+    }
+
+    .semana-rango {
+        font-size: 0.875rem;
+    }
+
+    .reporte-acciones {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .reporte-acciones .reporte-info {
+        margin-left: 0;
+        text-align: center;
+    }
+}

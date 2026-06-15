@@ -1,0 +1,7 @@
+<FilesMatch "^\.env">
+    Deny from all
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteRule ^data/ - [F,L]
+</IfModule>

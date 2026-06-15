@@ -1,0 +1,6 @@
+.env
+data/
+*.log
+/reportes/
+requests/token_cache.json
+requests/tipo_cambio_cache.json

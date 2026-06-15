@@ -1,0 +1,10 @@
+[26-May-2026 15:19:50 UTC] PayPal API falló tras 3 intentos: Network Error (cURL errno 7): Failed to connect to api-m.paypal.com port 443 after 0 ms: Could not connect to server
+[26-May-2026 15:19:50 UTC] PayPal TrackingInfo error: HTTP 0, cURL errno 7: Failed to connect to api-m.paypal.com port 443 after 0 ms: Could not connect to server
+[26-May-2026 15:20:03 UTC] PayPal API falló tras 3 intentos: Network Error (cURL errno 7): Failed to connect to api-m.paypal.com port 443 after 0 ms: Could not connect to server
+[26-May-2026 15:20:03 UTC] PayPal TrackingInfo error: HTTP 0, cURL errno 7: Failed to connect to api-m.paypal.com port 443 after 0 ms: Could not connect to server
+[26-May-2026 15:20:04 UTC] PayPal API falló tras 3 intentos: Network Error (cURL errno 7): Failed to connect to api-m.paypal.com port 443 after 0 ms: Could not connect to server
+[26-May-2026 15:20:04 UTC] PAYPAL ERROR en getTransactions: PayPal API error: HTTP 0 (cURL errno 7: Failed to connect to api-m.paypal.com port 443 after 0 ms: Could not connect to server)
+[26-May-2026 15:23:41 UTC] PayPal API falló tras 3 intentos: Network Error (cURL errno 7): Failed to connect to api-m.paypal.com port 443 after 0 ms: Could not connect to server
+[26-May-2026 15:23:41 UTC] PayPal TrackingInfo error: HTTP 0, cURL errno 7: Failed to connect to api-m.paypal.com port 443 after 0 ms: Could not connect to server
+[26-May-2026 15:23:51 UTC] PayPal API falló tras 3 intentos: Network Error (cURL errno 7): Failed to connect to api-m.paypal.com port 443 after 0 ms: Could not connect to server
+[26-May-2026 15:23:51 UTC] PayPal TrackingInfo error: HTTP 0, cURL errno 7: Failed to connect to api-m.paypal.com port 443 after 0 ms: Could not connect to server
