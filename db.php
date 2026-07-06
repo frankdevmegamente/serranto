@@ -1,4 +1,4 @@
-<?php
+ <?php
 define('DB_PATH', __DIR__ . '/data/app.db');
 
 function getDB(): PDO

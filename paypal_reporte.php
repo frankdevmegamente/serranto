@@ -222,30 +222,42 @@ $customEndVal = $modo === 'personalizado' ? $fin_str : $semana_actual_str;
             </div>
         <?php endif; ?>
 
-        <div class="stats-grid">
+        <div class="stats-grid stats-grid-horizontal">
             <div class="stat-card total">
-                <div class="stat-label">Total Movimientos</div>
+                <div class="stat-label">📊 Total Movimientos</div>
                 <div class="stat-value"><?= $total_pagos ?></div>
             </div>
             <div class="stat-card success">
-                <div class="stat-label">Completadas</div>
+                <div class="stat-label">✅ Completadas</div>
                 <div class="stat-value"><?= $resumen['total_completadas'] ?></div>
             </div>
             <div class="stat-card failed">
-                <div class="stat-label">Reembolsadas</div>
+                <div class="stat-label">↩️ Reembolsadas</div>
                 <div class="stat-value"><?= $resumen['total_reembolsadas'] ?></div>
             </div>
             <div class="stat-card warning">
-                <div class="stat-label">Retiros</div>
+                <div class="stat-label">⏳ Pendientes</div>
+                <div class="stat-value"><?= $resumen['total_pendientes'] ?></div>
+            </div>
+            <div class="stat-card currency">
+                <div class="stat-label">🏦 Retiros</div>
                 <div class="stat-value"><?= $resumen['total_chargebacks'] ?></div>
             </div>
-            <?php
-            $montoDepositado = $resumen['monto_retirado_mxn_formateado'] ?? '$ 0.00';
-            $tieneRetiros = $montoDepositado !== '$ 0.00';
-            ?>
+            <div class="stat-card total">
+                <div class="stat-label">💰 Total Bruto</div>
+                <div class="stat-value stat-value-sm"><?= htmlspecialchars($resumen['monto_bruto_formateado'] ?? '$ 0.00') ?></div>
+            </div>
+            <div class="stat-card failed">
+                <div class="stat-label">💸 Comisiones</div>
+                <div class="stat-value stat-value-sm"><?= htmlspecialchars($resumen['total_comisiones_formateado'] ?? '$ 0.00') ?></div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-label">📈 Total Neto</div>
+                <div class="stat-value stat-value-sm"><?= htmlspecialchars($resumen['total_neto_formateado'] ?? '$ 0.00') ?></div>
+            </div>
             <div class="stat-card currency">
-                <div class="stat-label"><?= $tieneRetiros ? 'Total Depositado en Banco (MXN)' : 'Total Recaudado' ?></div>
-                <div class="stat-value" style="font-size:1.25rem;"><?= $tieneRetiros ? htmlspecialchars($montoDepositado) : $resumen['monto_total_formateado'] ?></div>
+                <div class="stat-label">🪙 Moneda</div>
+                <div class="stat-value"><?= htmlspecialchars($resumen['moneda_principal'] ?? 'MXN') ?></div>
             </div>
         </div>
 

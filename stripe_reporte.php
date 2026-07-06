@@ -490,8 +490,7 @@ function renderTablaStripeReporte(array $pagos): void
                             <td class="text-right"><?= htmlspecialchars($p['monto_formateado']) ?></td>
                             <td class="text-right"><?= htmlspecialchars($p['monto_mxn_formateado'] ?? '—') ?></td>
                             <td class="text-right"><?php
-                                $feeMxn = $p['moneda'] === 'USD' ? ($p['comision_decimal'] * $p['tipo_cambio_usado']) : $p['comision_decimal'];
-                                $recMxn = max(0, $p['monto_mxn'] - $feeMxn);
+                                $recMxn = max(0, $p['monto_mxn'] - $p['comision_decimal']);
                                 echo htmlspecialchars('$ ' . number_format($recMxn, 2));
                             ?></td>
                             <td>

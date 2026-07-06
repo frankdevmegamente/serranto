@@ -693,6 +693,33 @@ function resumenPagosPaypal(array $completadas, array $reembolsadas, array $pend
     $totalChargebacks = array_sum(array_column($chargebacks, 'amount'));
     $currency = !empty($completadas) ? $completadas[0]['currency'] : (!empty($reembolsadas) ? $reembolsadas[0]['currency'] : (!empty($chargebacks) ? $chargebacks[0]['currency'] : 'MXN'));
 
+    $totalComisiones = array_sum(array_map(fn($t) => abs($t['fee']), $completadas));
+    $montoBruto = array_sum(array_column($completadas, 'amount'));
+
+    // Group completed transactions by currency
+    $porMoneda = [];
+    foreach ($completadas as $t) {
+        $cur = $t['currency'];
+        if (!isset($porMoneda[$cur])) {
+            $porMoneda[$cur] = ['cantidad' => 0, 'bruto' => 0, 'comisiones' => 0, 'neto' => 0];
+        }
+        $porMoneda[$cur]['cantidad']++;
+        $porMoneda[$cur]['bruto'] += $t['amount'];
+        $porMoneda[$cur]['comisiones'] += abs($t['fee']);
+        $porMoneda[$cur]['neto'] += $t['amount'] - abs($t['fee']);
+    }
+    $monedas = [];
+    foreach ($porMoneda as $cur => $data) {
+        $monedas[] = [
+            'moneda' => $cur,
+            'cantidad' => $data['cantidad'],
+            'bruto_formateado' => formatoMonedaPaypal($data['bruto'], $cur),
+            'comisiones_formateado' => formatoMonedaPaypal($data['comisiones'], $cur),
+            'neto_formateado' => formatoMonedaPaypal($data['neto'], $cur),
+        ];
+    }
+    usort($monedas, fn($a, $b) => $b['cantidad'] <=> $a['cantidad']);
+
     // Calculate MXN withdrawal total (T0403 withdrawals) to match PayPal CSV exports
     $mxnWithdrawalTotal = 0;
     $hasMxnWithdrawals = false;
@@ -709,7 +736,7 @@ function resumenPagosPaypal(array $completadas, array $reembolsadas, array $pend
         'total_pendientes' => count($pendientes),
         'total_chargebacks' => count($chargebacks),
         'total_general' => count($completadas) + count($reembolsadas) + count($pendientes) + count($chargebacks) + count($conversiones),
-        'monto_completado_bruto' => array_sum(array_column($completadas, 'amount')),
+        'monto_completado_bruto' => $montoBruto,
         'monto_reembolsado' => $totalReembolsado,
         'monto_chargebacks' => $totalChargebacks,
         'monto_total_formateado' => formatoMonedaPaypal($totalNeto, $currency),
@@ -717,6 +744,13 @@ function resumenPagosPaypal(array $completadas, array $reembolsadas, array $pend
         'monto_chargebacks_formateado' => formatoMonedaPaypal($totalChargebacks, $currency),
         'monto_retirado_mxn_formateado' => $hasMxnWithdrawals ? formatoMonedaPaypal($mxnWithdrawalTotal, 'MXN') : '$ 0.00',
         'moneda' => $currency,
+        'total_comisiones' => $totalComisiones,
+        'total_comisiones_formateado' => formatoMonedaPaypal($totalComisiones, $currency),
+        'monto_bruto_formateado' => formatoMonedaPaypal($montoBruto, $currency),
+        'total_neto' => $totalNeto,
+        'total_neto_formateado' => formatoMonedaPaypal($totalNeto, $currency),
+        'moneda_principal' => $currency,
+        'por_moneda' => $monedas,
     ];
 }
 
@@ -794,7 +828,6 @@ function exportarCSVPaypalSemanal(array $pagos, string $semana_inicio, string $s
 function buildReporteHTMLPaypal(array $pagos, string $semana_inicio, string $semana_fin, array $resumen): string
 {
     $totalPagos = $resumen['total_general'];
-    $moneda = $resumen['moneda'] ?? 'MXN';
 
     $rows = '';
     foreach ($pagos as $i => $p) {
@@ -819,8 +852,6 @@ function buildReporteHTMLPaypal(array $pagos, string $semana_inicio, string $sem
         $rows .= '</tr>';
     }
 
-    $tieneRetirosPaypal = ($resumen['monto_retirado_mxn_formateado'] ?? '$ 0.00') !== '$ 0.00';
-
     return '<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -831,7 +862,7 @@ function buildReporteHTMLPaypal(array $pagos, string $semana_inicio, string $sem
     h1 { font-size: 16pt; color: #0f172a; margin: 0 0 2px; }
     .subtitle { font-size: 8pt; color: #64748b; margin-bottom: 10px; }
     .summary-table { width: 100%; border-collapse: separate; border-spacing: 5px; margin-bottom: 12px; }
-    .summary-table td { width: 14.28%; vertical-align: top; padding: 0; }
+    .summary-table td { width: 16.66%; vertical-align: top; padding: 0; }
     .summary-box { padding: 7px 10px; border-radius: 6px; border-left: 4px solid #e2e8f0; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
     .summary-box .box-label { font-size: 6pt; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; font-weight: 700; margin-bottom: 1px; }
     .summary-box .box-value { font-size: 13pt; font-weight: 800; line-height: 1.2; }
@@ -840,7 +871,6 @@ function buildReporteHTMLPaypal(array $pagos, string $semana_inicio, string $sem
     .box-ok { border-left-color: #22c55e; } .box-ok .box-value { color: #16a34a; }
     .box-refund { border-left-color: #94a3b8; } .box-refund .box-value { color: #64748b; }
     .box-fail { border-left-color: #ef4444; } .box-fail .box-value { color: #dc2626; }
-    .box-revenue { border-left-color: #f59e0b; } .box-revenue .box-value { color: #d97706; }
     .box-retiros { border-left-color: #f97316; } .box-retiros .box-value { color: #ea580c; }
     .box-net { border-left-color: #8b5cf6; } .box-net .box-value { color: #7c3aed; }
     table { width: 100%; border-collapse: collapse; font-size: 6.5pt; }
@@ -858,13 +888,12 @@ function buildReporteHTMLPaypal(array $pagos, string $semana_inicio, string $sem
     <div class="subtitle">' . $semana_inicio . ' al ' . $semana_fin . '</div>
     <table class="summary-table">
         <tr>
-            <td><div class="summary-box box-mov"><div class="box-label">Total Movimientos</div><div class="box-value">' . $totalPagos . '</div><div class="box-sub">transacciones</div></div></td>
-            <td><div class="summary-box box-ok"><div class="box-label">Completadas</div><div class="box-value">' . $resumen['total_completadas'] . '</div><div class="box-sub">pagadas</div></div></td>
-            <td><div class="summary-box box-refund"><div class="box-label">Reembolsadas</div><div class="box-value">' . $resumen['total_reembolsadas'] . '</div><div class="box-sub">reembolsos</div></div></td>
-            <td><div class="summary-box box-revenue"><div class="box-label">Total Recaudado</div><div class="box-value">' . htmlspecialchars($resumen['monto_total_formateado']) . '</div><div class="box-sub">ingresos netos</div></div></td>
-            <td><div class="summary-box box-retiros"><div class="box-label">Retiros</div><div class="box-value">' . $resumen['total_chargebacks'] . '</div><div class="box-sub">retiros</div></div></td>
-            <td><div class="summary-box box-fail"><div class="box-label">Reembolsado</div><div class="box-value">' . htmlspecialchars($resumen['monto_reembolsado_formateado'] ?? '$ 0.00') . '</div><div class="box-sub">total reembolsado</div></div></td>
-            <td><div class="summary-box box-net"><div class="box-label">' . ($tieneRetirosPaypal ? 'Depositado (MXN)' : 'Recaudado (MXN)') . '</div><div class="box-value">' . ($tieneRetirosPaypal ? htmlspecialchars($resumen['monto_retirado_mxn_formateado']) : htmlspecialchars($resumen['monto_total_formateado'])) . '</div><div class="box-sub">' . ($tieneRetirosPaypal ? 'depositado en banco' : 'neto en pesos') . '</div></div></td>
+            <td><div class="summary-box box-mov"><div class="box-label">Total Movimientos</div><div class="box-value">' . $totalPagos . '</div><div class="box-sub">transacciones en el periodo</div></div></td>
+            <td><div class="summary-box box-ok"><div class="box-label">Completadas</div><div class="box-value">' . $resumen['total_completadas'] . '</div><div class="box-sub">' . htmlspecialchars($resumen['monto_bruto_formateado'] ?? '$ 0.00') . ' bruto</div></div></td>
+            <td><div class="summary-box box-refund"><div class="box-label">Reembolsadas</div><div class="box-value">' . $resumen['total_reembolsadas'] . '</div><div class="box-sub">' . htmlspecialchars($resumen['monto_reembolsado_formateado'] ?? '$ 0.00') . ' devuelto</div></div></td>
+            <td><div class="summary-box box-fail"><div class="box-label">Comisiones</div><div class="box-value">' . htmlspecialchars($resumen['total_comisiones_formateado'] ?? '$ 0.00') . '</div><div class="box-sub">cobrado por PayPal</div></div></td>
+            <td><div class="summary-box box-retiros"><div class="box-label">Retiros</div><div class="box-value">' . $resumen['total_chargebacks'] . '</div><div class="box-sub">chargebacks y retiros</div></div></td>
+            <td><div class="summary-box box-net"><div class="box-label">Total Neto (MXN)</div><div class="box-value">' . htmlspecialchars($resumen['total_neto_formateado'] ?? '$ 0.00') . '</div><div class="box-sub">bruto &minus; comisiones</div></div></td>
         </tr>
     </table>
     <table>

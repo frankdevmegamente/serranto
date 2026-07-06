@@ -15,7 +15,7 @@ function obtenerPaymentIntents(int $limit = 50, ?string $cursor = null): array
 {
     $params = [
         'limit'  => min($limit, 100),
-        'expand' => ['data.latest_charge'],
+        'expand' => ['data.latest_charge', 'data.latest_charge.balance_transaction'],
     ];
 
     if ($cursor) {
@@ -66,15 +66,31 @@ function clasificarPagos(array $intents): array
 
         $nombreVal = $billing->name ?? $pago->metadata->customer_name ?? $pago->metadata->nombre ?? '—';
 
-        $comision = max(0, $pago->amount - $pago->amount_received);
+        $comision = 0;
+        $bt = null;
+        if ($chargeData && $chargeData->balance_transaction && is_object($chargeData->balance_transaction)) {
+            $bt = $chargeData->balance_transaction;
+            $comision = $bt->fee ?? 0;
+        }
+        if (!$bt && $pago->status !== 'succeeded') {
+            $comision = 0;
+        } elseif (!$bt) {
+            $comision = max(0, $pago->amount - $pago->amount_received);
+        }
         $montoDecimal = $pago->amount / 100;
         $monedaUpper = strtoupper($pago->currency);
         $tcActual = null;
-        if ($monedaUpper === 'USD') {
+        $montoMxn = $montoDecimal;
+        if ($bt && is_object($bt) && isset($bt->currency)) {
+            $montoMxn = $bt->amount / 100;
+            if ($monedaUpper === 'USD') {
+                $tcActual = round($montoMxn / $montoDecimal, 4);
+            }
+        } elseif ($monedaUpper === 'USD') {
             $tcInfo = obtenerInfoTipoCambio();
             $tcActual = $tcInfo['rate'];
+            $montoMxn = round($montoDecimal * $tcActual, 2);
         }
-        $montoMxn = $monedaUpper === 'USD' ? round($montoDecimal * $tcActual, 2) : $montoDecimal;
         $pagoData = [
             'id'               => $pago->id,
             'charge_id'        => null,
@@ -93,7 +109,7 @@ function clasificarPagos(array $intents): array
             'moneda'           => $monedaUpper,
             'monto_formateado' => formatoMoneda($pago->amount, $pago->currency),
             'monto_recibido_formateado' => formatoMoneda($pago->amount_received, $pago->currency),
-            'comision_formateado' => formatoMoneda($comision, $pago->currency),
+            'comision_formateado' => formatoMoneda($comision, 'MXN'),
             'email'            => $emailVal,
             'nombre'           => $nombreVal,
             'telefono'         => ($billing ? $billing->phone : null) ?? '—',
@@ -239,7 +255,7 @@ function resumenPagos(array $exitosos, array $fallidos, array $reembolsadas = []
         'monto_total_mxn'    => $totalMxn,
         'monto_total_mxn_formateado' => '$ ' . number_format($totalMxn, 2),
         'monto_comision_total' => $totalComision,
-        'monto_comision_total_formateado' => $exitosos ? formatoMoneda($totalComision, $monedaPrimera) : '$ 0.00',
+        'monto_comision_total_formateado' => $exitosos ? formatoMoneda($totalComision, 'MXN') : '$ 0.00',
         'monto_neto_total'   => $totalNeto,
         'monto_neto_total_formateado' => $exitosos ? formatoMoneda($totalNeto, $monedaPrimera) : '$ 0.00',
         'tipo_cambio'        => $tcUsado,
@@ -329,7 +345,7 @@ function obtenerPagosPorRango(int $timestamp_inicio, int $timestamp_fin): array
 {
     $params = [
         'limit'  => 100,
-        'expand' => ['data.latest_charge'],
+        'expand' => ['data.latest_charge', 'data.latest_charge.balance_transaction'],
         'created' => [
             'gte' => $timestamp_inicio,
             'lte' => $timestamp_fin,
@@ -448,10 +464,7 @@ function buildReporteHTML(array $pagos, string $semana_inicio, string $semana_fi
     $totalPagos = $resumen['total_general'] ?? ($resumen['total_exitosos'] + $resumen['total_fallidos']);
     $moneda = $resumen['moneda'] ?? 'MXN';
     $comisionTotalDecimal = ($resumen['monto_comision_total'] ?? 0) / 100;
-    $feeTotalMxn = $moneda === 'USD'
-        ? ($comisionTotalDecimal * ($resumen['tipo_cambio'] ?? 1))
-        : $comisionTotalDecimal;
-    $recibidoTotalMxn = max(0, ($resumen['monto_total_mxn'] ?? 0) - $feeTotalMxn);
+    $recibidoTotalMxn = max(0, ($resumen['monto_total_mxn'] ?? 0) - $comisionTotalDecimal);
     $recibidoTotalMxnFormateado = '$ ' . number_format($recibidoTotalMxn, 2);
 
     $rows = '';
@@ -473,8 +486,7 @@ function buildReporteHTML(array $pagos, string $semana_inicio, string $semana_fi
         $rows .= '<td>' . htmlspecialchars($p['monto_formateado']) . '</td>';
         $rows .= '<td>' . htmlspecialchars($p['moneda']) . '</td>';
         $rows .= '<td>' . htmlspecialchars($comisionFormateado) . '</td>';
-        $feeEnMxn = $p['moneda'] === 'USD' ? ($p['comision_decimal'] * $p['tipo_cambio_usado']) : $p['comision_decimal'];
-        $recibidoMxn = max(0, $p['monto_mxn'] - $feeEnMxn);
+        $recibidoMxn = max(0, $p['monto_mxn'] - $p['comision_decimal']);
         $recibidoMxnFormateado = '$ ' . number_format($recibidoMxn, 2);
         $rows .= '<td>' . htmlspecialchars($recibidoMxnFormateado) . '</td>';
         $rows .= '<td class="' . $estadoClass . '">' . htmlspecialchars($p['status_label'] ?? $p['estado']) . '</td>';
@@ -522,7 +534,7 @@ function buildReporteHTML(array $pagos, string $semana_inicio, string $semana_fi
             <td><div class="summary-box box-ok"><div class="box-label">Exitosos</div><div class="box-value">' . $resumen['total_exitosos'] . '</div><div class="box-sub">pagadas</div></div></td>
             <td><div class="summary-box box-refund"><div class="box-label">Reembolsadas</div><div class="box-value">' . ($resumen['total_reembolsadas'] ?? 0) . '</div><div class="box-sub">reembolsos</div></div></td>
             <td><div class="summary-box box-fail"><div class="box-label">Fallidos</div><div class="box-value">' . $resumen['total_fallidos'] . '</div><div class="box-sub">fallos</div></div></td>
-            <td><div class="summary-box box-revenue"><div class="box-label">Total Recaudado</div><div class="box-value">' . htmlspecialchars($resumen['monto_total_formateado']) . '</div><div class="box-sub">ingresos brutos</div></div></td>
+            <td><div class="summary-box box-revenue"><div class="box-label">Total Recaudado (' . htmlspecialchars($resumen['moneda'] ?? 'MXN') . ')</div><div class="box-value">' . htmlspecialchars($resumen['monto_total_formateado']) . '</div><div class="box-sub">ingresos brutos</div></div></td>
             <td><div class="summary-box box-net"><div class="box-label">Recibido (MXN)</div><div class="box-value">' . htmlspecialchars($recibidoTotalMxnFormateado) . '</div><div class="box-sub">neto en pesos</div></div></td>
             <td><div class="summary-box box-fees"><div class="box-label">Total Comisiones</div><div class="box-value">' . htmlspecialchars($resumen['monto_comision_total_formateado'] ?? '$ 0.00') . '</div><div class="box-sub">cobradas</div></div></td>
         </tr>

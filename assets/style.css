@@ -279,6 +279,44 @@ body {
     color: var(--text-primary);
 }
 
+.stat-card .stat-value-sm {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-top: 0.25rem;
+    color: var(--text-primary);
+    word-break: break-word;
+}
+
+.stat-card.warning { border-left-color: var(--color-warning); }
+
+/* --- Horizontal layout: all cards in one row --- */
+.stats-grid-horizontal {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.675rem;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+}
+
+.stats-grid-horizontal .stat-card {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 0.85rem 0.9rem;
+}
+
+.stats-grid-horizontal .stat-card .stat-label {
+    font-size: 0.65rem;
+    white-space: nowrap;
+}
+
+.stats-grid-horizontal .stat-card .stat-value {
+    font-size: 1.25rem;
+}
+
+.stats-grid-horizontal .stat-card .stat-value-sm {
+    font-size: 0.9rem;
+}
+
 /* --- Filters Bar --- */
 .filters-bar {
     background: var(--bg-card);
