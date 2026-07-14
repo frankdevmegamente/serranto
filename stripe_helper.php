@@ -572,7 +572,7 @@ function generarPDF(array $pagos, string $semana_inicio, string $semana_fin, arr
     $dompdf->loadHtml($html);
     $dompdf->setPaper('A4', 'landscape');
     $dompdf->render();
-    $dompdf->stream("reporte_semanal_{$semana_inicio}_al_{$semana_fin}.pdf", ['Attachment' => true]);
+    $dompdf->stream("reporte_semanal_{$semana_inicio}_al_{$semana_fin}.pdf", ['Attachment' => false]);
     exit;
 }
 

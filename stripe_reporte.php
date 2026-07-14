@@ -81,14 +81,38 @@ if ($modo === 'personalizado') {
     $export_params = "semana=" . urlencode($semana_ref ?? $semana_actual_str);
 }
 
+// Filtrar por IDs seleccionados (para exportacion)
+$selectedParam = trim($_GET['selected'] ?? '');
+$selectedIds = [];
+if ($selectedParam !== '') {
+    $raw = array_map('trim', explode(',', $selectedParam));
+    foreach ($raw as $id) { if ($id !== '') $selectedIds[$id] = true; }
+    $selectedIds = array_keys($selectedIds);
+}
+$applySelectedFilter = function() use (&$todos, &$exitosos, &$fallidos, &$reembolsadas, &$resumen, &$total_pagos, $selectedIds) {
+    if (empty($selectedIds)) return;
+    $filterByIds = function($list) use ($selectedIds) {
+        return array_values(array_filter($list, fn($p) => in_array($p['id'], $selectedIds)));
+    };
+    $todos = $filterByIds($todos);
+    $exitosos = $filterByIds($exitosos);
+    $fallidos = $filterByIds($fallidos);
+    $reembolsadas = $filterByIds($reembolsadas);
+    $resumen = resumenPagos($exitosos, $fallidos, $reembolsadas);
+    $total_pagos = count($exitosos) + count($reembolsadas) + count($fallidos);
+};
+
 // --- Export handlers ---
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
+    $applySelectedFilter();
     exportarCSVSemanal($todos, $label_inicio, $label_fin);
 }
 if (isset($_GET['export']) && $_GET['export'] === 'pdf') {
+    $applySelectedFilter();
     generarPDF($todos, $label_inicio, $label_fin, $resumen);
 }
 if (isset($_GET['guardar']) && $_GET['guardar'] === '1') {
+    $applySelectedFilter();
     $dir = __DIR__ . '/reportes';
     $csvPath = guardarCSVSemanal($todos, $label_inicio, $label_fin, $dir);
     $pdfPath = guardarPDFSemanal($todos, $label_inicio, $label_fin, $resumen, $dir);
@@ -198,32 +222,32 @@ if (isset($_GET['guardar']) && $_GET['guardar'] === '1') {
         <div class="stats-grid">
             <div class="stat-card total">
                 <div class="stat-label">Total Movimientos</div>
-                <div class="stat-value"><?= $total_pagos ?></div>
+                <div class="stat-value" id="statTotalMov"><?= $total_pagos ?></div>
             </div>
             <div class="stat-card success">
                 <div class="stat-label">Exitosos</div>
-                <div class="stat-value"><?= count($exitosos) ?></div>
+                <div class="stat-value" id="statExitosos"><?= count($exitosos) ?></div>
             </div>
             <div class="stat-card failed">
                 <div class="stat-label">Fallidos</div>
-                <div class="stat-value"><?= count($fallidos) ?></div>
+                <div class="stat-value" id="statFallidos"><?= count($fallidos) ?></div>
             </div>
             <div class="stat-card currency">
                 <div class="stat-label">Total Recaudado</div>
-                <div class="stat-value" style="font-size:1.25rem;"><?= $resumen['monto_total_formateado'] ?></div>
+                <div class="stat-value" id="statRecaudado" style="font-size:1.25rem;"><?= $resumen['monto_total_formateado'] ?></div>
             </div>
             <div class="stat-card currency">
                 <div class="stat-label">Total MXN</div>
-                <div class="stat-value" style="font-size:1.1rem;word-break:break-word;"><?= htmlspecialchars($resumen['monto_total_mxn_formateado'] ?? '$ 0.00') ?></div>
+                <div class="stat-value" id="statTotalMxn" style="font-size:1.1rem;word-break:break-word;"><?= htmlspecialchars($resumen['monto_total_mxn_formateado'] ?? '$ 0.00') ?></div>
             </div>
         </div>
 
         <?php if ($total_pagos > 0): ?>
             <div class="reporte-acciones">
-                <a href="<?= $embed ? 'stripe_reporte.php?' : '?' ?>export=csv&<?= $export_params ?>"<?= $embed ? ' target="_blank"' : '' ?> class="btn">⬇ Exportar CSV</a>
-                <a href="<?= $embed ? 'stripe_reporte.php?' : '?' ?>export=pdf&<?= $export_params ?>"<?= $embed ? ' target="_blank"' : '' ?> class="btn">📄 Descargar PDF</a>
-                <a href="<?= $embed ? 'stripe_reporte.php?' : '?' ?>guardar=1&<?= $export_params ?>"<?= $embed ? ' target="_blank"' : '' ?> class="btn">💾 Guardar en servidor</a>
-                <span class="reporte-info text-muted"><?= $total_pagos ?> movimiento(s) · <?= count($reembolsadas) ?> reembolsado(s)</span>
+                <button onclick="exportarSeleccion('csv')" class="btn">⬇ Exportar CSV</button>
+                <button onclick="exportarSeleccion('pdf')" class="btn">📄 Descargar PDF</button>
+                <button onclick="exportarSeleccion('guardar')" class="btn">💾 Guardar en servidor</button>
+                <span class="reporte-info text-muted" id="reporteInfo"><?= $total_pagos ?> movimiento(s) · <?= count($reembolsadas) ?> reembolsado(s)</span>
             </div>
         <?php endif; ?>
 
@@ -250,6 +274,96 @@ if (isset($_GET['guardar']) && $_GET['guardar'] === '1') {
 
     <?php if ($embed): ?>
     <script id="reporteStripeData" type="application/json"><?= json_encode(['data' => $todos, 'modo' => $modo, 'start' => $label_inicio, 'end' => $label_fin], JSON_UNESCAPED_UNICODE) ?></script>
+    <script>
+    var pagosDataStripe = JSON.parse(document.getElementById('reporteStripeData').textContent).data;
+
+    function sincronizarCheckboxes(source) {
+        var val = source.value, isChecked = source.checked;
+        document.querySelectorAll('.row-checkbox').forEach(function(cb) {
+            if (cb.value === val && cb !== source) {
+                cb.checked = isChecked;
+                var row = cb.closest('tr');
+                if (row) row.style.opacity = isChecked ? '1' : '0.4';
+            }
+        });
+    }
+
+    function getSelectedIds() {
+        var ids = [], seen = {};
+        document.querySelectorAll('.row-checkbox:checked').forEach(function(cb) {
+            if (!seen[cb.value]) { seen[cb.value] = true; ids.push(cb.value); }
+        });
+        return ids;
+    }
+
+    function toggleSelectAll(checkbox) {
+        var table = checkbox.closest('table');
+        if (!table) return;
+        var isChecked = checkbox.checked;
+        var valueMap = {};
+        table.querySelectorAll('.row-checkbox').forEach(function(cb) {
+            cb.checked = isChecked;
+            valueMap[cb.value] = true;
+        });
+        document.querySelectorAll('.row-checkbox').forEach(function(cb) {
+            if (valueMap[cb.value] && cb.checked !== isChecked) cb.checked = isChecked;
+        });
+        onCheckboxChange();
+    }
+
+    function onCheckboxChange() {
+        document.querySelectorAll('.row-checkbox').forEach(function(cb) {
+            var row = cb.closest('tr');
+            if (row) row.style.opacity = cb.checked ? '1' : '0.4';
+        });
+        document.querySelectorAll('.select-all-checkbox').forEach(function(sa) {
+            var table = sa.closest('table');
+            if (!table) return;
+            var cbs = table.querySelectorAll('.row-checkbox');
+            sa.checked = cbs.length > 0 && Array.from(cbs).every(function(cb) { return cb.checked; });
+        });
+        recalcularResumen();
+    }
+
+    function recalcularResumen() {
+        if (!pagosDataStripe || !pagosDataStripe.length) return;
+        var selectedIds = new Set();
+        document.querySelectorAll('.row-checkbox:checked').forEach(function(cb) { selectedIds.add(cb.value); });
+        var selected = pagosDataStripe.filter(function(p) { return selectedIds.has(p.id); });
+        var exitosos = selected.filter(function(p) { return p.estado === 'Exitoso'; });
+        var fallidos = selected.filter(function(p) { return p.estado === 'Fallido'; });
+        var reembolsadas = selected.filter(function(p) { return p.estado === 'Reembolsado'; });
+        var allOk = exitosos.concat(reembolsadas);
+        var totalCentavos = 0, totalMxn = 0;
+        allOk.forEach(function(p) { totalCentavos += p.monto; totalMxn += p.monto_mxn; });
+        var elTotalMov = document.getElementById('statTotalMov');
+        var elExitosos = document.getElementById('statExitosos');
+        var elFallidos = document.getElementById('statFallidos');
+        var elRecaudado = document.getElementById('statRecaudado');
+        var elTotalMxn = document.getElementById('statTotalMxn');
+        var elInfo = document.getElementById('reporteInfo');
+        if (elTotalMov) elTotalMov.textContent = selected.length;
+        if (elExitosos) elExitosos.textContent = exitosos.length;
+        if (elFallidos) elFallidos.textContent = fallidos.length;
+        if (elRecaudado) elRecaudado.textContent = '$ ' + (totalCentavos / 100).toFixed(2);
+        if (elTotalMxn) elTotalMxn.textContent = '$ ' + totalMxn.toFixed(2);
+        if (elInfo) elInfo.textContent = selected.length + ' movimiento(s) \u00B7 ' + reembolsadas.length + ' reembolsado(s)';
+    }
+
+    function exportarSeleccion(tipo) {
+        var ids = getSelectedIds();
+        if (ids.length === 0) {
+            if (typeof toast === 'function') { toast('No hay transacciones seleccionadas', 'error'); }
+            else { alert('No hay transacciones seleccionadas para exportar'); }
+            return;
+        }
+        var params = '<?= $export_params ?>' + '&selected=' + ids.map(encodeURIComponent).join(',');
+        var url = 'stripe_reporte.php?' + params + (tipo === 'guardar' ? '&guardar=1' : '&export=' + tipo);
+        window.open(url, '_blank');
+    }
+
+    document.addEventListener('DOMContentLoaded', function() { setTimeout(onCheckboxChange, 50); });
+    </script>
     <?php else: ?>
     <div class="modal-overlay" id="modalOverlay" onclick="cerrarModalOutsideStripe(event)">
         <div class="modal">
@@ -443,6 +557,112 @@ if (isset($_GET['guardar']) && $_GET['guardar'] === '1') {
         });
         return false;
     }
+
+    // ===== SELECCION DE TRANSACCIONES =====
+    function sincronizarCheckboxes(source) {
+        var val = source.value, isChecked = source.checked;
+        document.querySelectorAll('.row-checkbox').forEach(function(cb) {
+            if (cb.value === val && cb !== source) {
+                cb.checked = isChecked;
+                var row = cb.closest('tr');
+                if (row) row.style.opacity = isChecked ? '1' : '0.4';
+            }
+        });
+    }
+
+    function getSelectedIds() {
+        var ids = [], seen = {};
+        document.querySelectorAll('.row-checkbox:checked').forEach(function(cb) {
+            if (!seen[cb.value]) { seen[cb.value] = true; ids.push(cb.value); }
+        });
+        return ids;
+    }
+
+    function toggleSelectAll(checkbox) {
+        var table = checkbox.closest('table');
+        if (!table) return;
+        var isChecked = checkbox.checked;
+        var valueMap = {};
+        table.querySelectorAll('.row-checkbox').forEach(function(cb) {
+            cb.checked = isChecked;
+            valueMap[cb.value] = true;
+        });
+        document.querySelectorAll('.row-checkbox').forEach(function(cb) {
+            if (valueMap[cb.value] && cb.checked !== isChecked) cb.checked = isChecked;
+        });
+        onCheckboxChange();
+    }
+
+    function onCheckboxChange() {
+        document.querySelectorAll('.row-checkbox').forEach(function(cb) {
+            var row = cb.closest('tr');
+            if (row) row.style.opacity = cb.checked ? '1' : '0.4';
+        });
+        document.querySelectorAll('.select-all-checkbox').forEach(function(sa) {
+            var table = sa.closest('table');
+            if (!table) return;
+            var cbs = table.querySelectorAll('.row-checkbox');
+            sa.checked = cbs.length > 0 && Array.from(cbs).every(function(cb) { return cb.checked; });
+        });
+        recalcularResumen();
+    }
+
+    function recalcularResumen() {
+        if (typeof pagosDataStripe === 'undefined' || !pagosDataStripe.length) return;
+        var selectedIds = new Set();
+        document.querySelectorAll('.row-checkbox:checked').forEach(function(cb) {
+            selectedIds.add(cb.value);
+        });
+        var selected = pagosDataStripe.filter(function(p) { return selectedIds.has(p.id); });
+        var exitosos = selected.filter(function(p) { return p.estado === 'Exitoso'; });
+        var fallidos = selected.filter(function(p) { return p.estado === 'Fallido'; });
+        var reembolsadas = selected.filter(function(p) { return p.estado === 'Reembolsado'; });
+        var allOk = exitosos.concat(reembolsadas);
+        var totalCentavos = 0, totalMxn = 0, moneda = '';
+        allOk.forEach(function(p) {
+            totalCentavos += p.monto;
+            totalMxn += p.monto_mxn;
+            if (!moneda) moneda = p.moneda;
+        });
+        var totalFmt = '$ ' + (totalCentavos / 100).toFixed(2);
+        var mxnFmt = '$ ' + totalMxn.toFixed(2);
+        var elTotalMov = document.getElementById('statTotalMov');
+        var elExitosos = document.getElementById('statExitosos');
+        var elFallidos = document.getElementById('statFallidos');
+        var elRecaudado = document.getElementById('statRecaudado');
+        var elTotalMxn = document.getElementById('statTotalMxn');
+        var elInfo = document.getElementById('reporteInfo');
+        if (elTotalMov) elTotalMov.textContent = selected.length;
+        if (elExitosos) elExitosos.textContent = exitosos.length;
+        if (elFallidos) elFallidos.textContent = fallidos.length;
+        if (elRecaudado) elRecaudado.textContent = totalFmt;
+        if (elTotalMxn) elTotalMxn.textContent = mxnFmt;
+        if (elInfo) elInfo.textContent = selected.length + ' movimiento(s) \u00B7 ' + reembolsadas.length + ' reembolsado(s)';
+    }
+
+    function exportarSeleccion(tipo) {
+        var ids = getSelectedIds();
+        if (ids.length === 0) {
+            toast('No hay transacciones seleccionadas para exportar', 'error');
+            return;
+        }
+        var params = '<?= $export_params ?>' + '&selected=' + ids.map(encodeURIComponent).join(',');
+        <?php if ($embed): ?>
+        var baseUrl = 'stripe_reporte.php?';
+        window.open(baseUrl + params + '&export=' + tipo, '_blank');
+        <?php else: ?>
+        var baseUrl = '?';
+        if (tipo === 'pdf') {
+            window.open(baseUrl + params + '&export=pdf', '_blank');
+        } else {
+            window.location.href = baseUrl + params + (tipo === 'csv' ? '&export=csv' : '&guardar=1');
+        }
+        <?php endif; ?>
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        setTimeout(onCheckboxChange, 50);
+    });
     </script>
     </body>
     </html>
@@ -458,6 +678,7 @@ function renderTablaStripeReporte(array $pagos): void
             <table>
                 <thead>
                     <tr>
+                        <th style="width:32px;"><input type="checkbox" class="select-all-checkbox" checked onchange="toggleSelectAll(this)"></th>
                         <th>#</th>
                         <th>Fecha</th>
                         <th>Cliente</th>
@@ -477,6 +698,7 @@ function renderTablaStripeReporte(array $pagos): void
                     <?php foreach ($pagos as $i => $p): ?>
                         <tr onclick="<?php global $embed; echo $embed ? "parent.abrirDetalleModalReporteStripe('" . htmlspecialchars($p['id'], ENT_QUOTES) . "')" : "abrirModalStripe('" . htmlspecialchars($p['id'], ENT_QUOTES) . "')" ?>"
                             data-id="<?= htmlspecialchars($p['id']) ?>">
+                            <td style="width:32px;"><input type="checkbox" class="row-checkbox" value="<?= htmlspecialchars($p['id']) ?>" checked onclick="event.stopPropagation();sincronizarCheckboxes(this)" onchange="onCheckboxChange()"></td>
                             <td class="text-muted"><?= $i + 1 ?></td>
                             <td class="text-nowrap"><?= htmlspecialchars($p['fecha_actualizacion']) ?></td>
                             <td>

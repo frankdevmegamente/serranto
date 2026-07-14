@@ -1220,6 +1220,17 @@ setSecurityHeaders();
                 if (picker) {
                     picker.addEventListener('change', function() { loadStripeReporte(this.value); });
                 }
+
+                // Init checkbox handlers for selection
+                content.querySelectorAll('.select-all-checkbox').forEach(function(sa) {
+                    sa.addEventListener('change', function() { toggleSelectAll(this); });
+                });
+                content.querySelectorAll('.row-checkbox').forEach(function(cb) {
+                    cb.addEventListener('click', function(e) { e.stopPropagation(); sincronizarCheckboxes(this); });
+                    cb.addEventListener('change', function() { onCheckboxChange(); });
+                });
+                // Set initial row state & recalc summary
+                setTimeout(function() { onCheckboxChange(); }, 50);
             })
             .catch(function() {
                 content.innerHTML = '<div class="alert alert-error">Error al cargar el reporte. Verifica la conexión.</div>';
@@ -1302,6 +1313,100 @@ setSecurityHeaders();
         document.getElementById('modalBody').innerHTML = html;
         document.getElementById('modalOverlay').classList.add('active');
         document.body.style.overflow = 'hidden';
+    }
+
+    // === SELECCION DE TRANSACCIONES (STRIPE REPORTE AJAX) ===
+    function sincronizarCheckboxes(source) {
+        var val = source.value, isChecked = source.checked;
+        document.querySelectorAll('#reporteStripeContent .row-checkbox').forEach(function(cb) {
+            if (cb.value === val && cb !== source) {
+                cb.checked = isChecked;
+                var row = cb.closest('tr');
+                if (row) row.style.opacity = isChecked ? '1' : '0.4';
+            }
+        });
+    }
+
+    function getSelectedIds() {
+        var ids = [], seen = {};
+        document.querySelectorAll('#reporteStripeContent .row-checkbox:checked').forEach(function(cb) {
+            if (!seen[cb.value]) { seen[cb.value] = true; ids.push(cb.value); }
+        });
+        return ids;
+    }
+
+    function toggleSelectAll(checkbox) {
+        var table = checkbox.closest('table');
+        if (!table) return;
+        var isChecked = checkbox.checked;
+        var valueMap = {};
+        table.querySelectorAll('.row-checkbox').forEach(function(cb) {
+            cb.checked = isChecked;
+            valueMap[cb.value] = true;
+        });
+        document.querySelectorAll('#reporteStripeContent .row-checkbox').forEach(function(cb) {
+            if (valueMap[cb.value] && cb.checked !== isChecked) cb.checked = isChecked;
+        });
+        onCheckboxChange();
+    }
+
+    function onCheckboxChange() {
+        document.querySelectorAll('#reporteStripeContent .row-checkbox').forEach(function(cb) {
+            var row = cb.closest('tr');
+            if (row) row.style.opacity = cb.checked ? '1' : '0.4';
+        });
+        document.querySelectorAll('#reporteStripeContent .select-all-checkbox').forEach(function(sa) {
+            var table = sa.closest('table');
+            if (!table) return;
+            var cbs = table.querySelectorAll('.row-checkbox');
+            sa.checked = cbs.length > 0 && Array.from(cbs).every(function(cb) { return cb.checked; });
+        });
+        recalcularResumen();
+    }
+
+    function recalcularResumen() {
+        if (!window._reporteStripeData || !window._reporteStripeData.length) return;
+        var selectedIds = new Set();
+        document.querySelectorAll('#reporteStripeContent .row-checkbox:checked').forEach(function(cb) { selectedIds.add(cb.value); });
+        var selected = window._reporteStripeData.filter(function(p) { return selectedIds.has(p.id); });
+        var exitosos = selected.filter(function(p) { return p.estado === 'Exitoso'; });
+        var fallidos = selected.filter(function(p) { return p.estado === 'Fallido'; });
+        var reembolsadas = selected.filter(function(p) { return p.estado === 'Reembolsado'; });
+        var allOk = exitosos.concat(reembolsadas);
+        var totalCentavos = 0, totalMxn = 0;
+        allOk.forEach(function(p) { totalCentavos += p.monto; totalMxn += p.monto_mxn; });
+        var content = document.getElementById('reporteStripeContent');
+        if (!content) return;
+        var elTotalMov = content.querySelector('#statTotalMov');
+        var elExitosos = content.querySelector('#statExitosos');
+        var elFallidos = content.querySelector('#statFallidos');
+        var elRecaudado = content.querySelector('#statRecaudado');
+        var elTotalMxn = content.querySelector('#statTotalMxn');
+        var elInfo = content.querySelector('#reporteInfo');
+        if (elTotalMov) elTotalMov.textContent = selected.length;
+        if (elExitosos) elExitosos.textContent = exitosos.length;
+        if (elFallidos) elFallidos.textContent = fallidos.length;
+        if (elRecaudado) elRecaudado.textContent = '$ ' + (totalCentavos / 100).toFixed(2);
+        if (elTotalMxn) elTotalMxn.textContent = '$ ' + totalMxn.toFixed(2);
+        if (elInfo) elInfo.textContent = selected.length + ' movimiento(s) \u00B7 ' + reembolsadas.length + ' reembolsado(s)';
+    }
+
+    function buildExportParams() {
+        if (currentStripeModo === 'personalizado') {
+            return 'modo=personalizado&start=' + encodeURIComponent(currentStripeStart) + '&end=' + encodeURIComponent(currentStripeEnd);
+        }
+        return 'semana=' + encodeURIComponent(currentStripeSemana || new Date().toISOString().slice(0, 10));
+    }
+
+    function exportarSeleccion(tipo) {
+        var ids = getSelectedIds();
+        if (ids.length === 0) {
+            toast('No hay transacciones seleccionadas para exportar', 'error');
+            return;
+        }
+        var params = buildExportParams() + '&selected=' + ids.map(encodeURIComponent).join(',');
+        var url = 'stripe_reporte.php?' + params + (tipo === 'guardar' ? '&guardar=1' : '&export=' + tipo);
+        window.open(url, '_blank');
     }
 
     // === DOM READY ===
